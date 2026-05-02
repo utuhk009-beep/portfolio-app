@@ -1,158 +1,170 @@
 <!DOCTYPE html>
+
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Portfolio Manager PRO</title>
+<title>Portfolio PRO FINAL</title>
 <style>
-body { font-family:-apple-system; background:#f5f6f8; margin:0; font-size:16px; }
-.container { max-width:1100px; margin:auto; padding:20px; }
-h1 { font-size:24px; margin:0; }
-.card { background:#fff; border-radius:12px; padding:18px; margin-top:14px; box-shadow:0 1px 3px rgba(0,0,0,.05); }
-table { width:100%; border-collapse:collapse; }
-th, td { padding:12px; text-align:center; border-bottom:1px solid #eee; }
-th { font-size:14px; color:#64748b; text-transform:uppercase; }
-input { width:80px; padding:6px; font-size:16px; text-align:right; border:1px solid #ddd; border-radius:6px; }
-input.ticker { text-align:center; text-transform:uppercase; font-weight:600; }
-.btn { padding:8px 14px; border-radius:8px; border:none; cursor:pointer; font-size:15px; }
-.primary { background:#111; color:#fff; }
-.gray { background:#e5e7eb; }
-.buy { color:#059669; font-weight:700; }
-.sell { color:#dc2626; font-weight:700; }
-.topbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
-.warn { color:#dc2626; font-weight:700; margin-left:10px; }
+body{font-family:-apple-system;background:#f5f6f8;margin:0}
+.container{max-width:1100px;margin:auto;padding:20px}
+.card{background:#fff;padding:16px;border-radius:10px;margin-top:12px;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+input{width:80px;text-align:right;padding:4px;border:1px solid #ddd;border-radius:4px}
+.btn{padding:8px 14px;border:none;border-radius:6px;cursor:pointer;background:#111;color:#fff}
+.buy{color:#059669;font-weight:bold}
+.sell{color:#dc2626;font-weight:bold}
+.risk{color:#dc2626;font-weight:bold;margin:4px 0}
+h2{margin:0 0 10px}
 </style>
 </head>
+
 <body>
 <div class="container">
-<div class="topbar">
-<h1>📊 Portfolio Manager PRO</h1>
-<div id="fx">환율 로딩중...</div>
-</div>
+
+<h2>📊 Portfolio PRO FINAL</h2>
 
 <div class="card">
-총 자산: <b id="total"></b> <span id="sumWarn" class="warn"></span>
-<br><br>
-현금: $<input id="cash" value="10000">
-최소 주문수량: <input id="minQty" value="1">
-<button class="btn primary" onclick="updatePrices()">🔄 가격 업데이트</button>
+현금 $<input id="cash" value="10000">
+세율 LT <input id="taxLT" value="0.15">
+세율 ST <input id="taxST" value="0.30">
+API <input id="key" style="width:200px;text-align:left">
+<button class="btn" onclick="saveKey()">저장</button>
+<button class="btn" onclick="updateAll()">🔄 실행</button>
 </div>
 
-<div class="card">
-<button class="btn primary" onclick="add()">+ 종목 추가</button>
-<button class="btn gray" onclick="save()">저장</button>
-<button class="btn gray" onclick="reset()">초기화</button>
-</div>
+<div class="card"><h3>주문</h3><div id="orders"></div></div>
+<div class="card"><h3>시뮬레이션</h3><div id="simulation"></div></div>
+<div class="card"><h3>리스크</h3><div id="risk"></div></div>
 
-<div class="card">
-<table>
-<thead>
-<tr>
-<th>티커</th><th>현재가</th><th>수량</th><th>목표%</th><th>현재%</th>
-<th>평가금액</th><th>KRW</th><th>목표금액</th><th>차액</th><th>주문</th><th></th>
-</tr>
-</thead>
-<tbody id="tbody"></tbody>
-</table>
-</div>
-
-<div class="card">
-<h3>ORDER LIST</h3>
-<div id="orders" style="font-family:ui-monospace; line-height:1.6;"></div>
-</div>
 </div>
 
 <script>
-const API_KEY = "여기에_API키";
-let fxRate = 1350;
+let API_KEY = localStorage.getItem("key")||"";
+document.getElementById("key").value = API_KEY;
 
-let state = JSON.parse(localStorage.getItem("portfolio")) || {
-  holdings: [
-    { ticker:"QQQ", price:508, qty:10, target:30 },
-    { ticker:"META", price:585, qty:5, target:20 },
-    { ticker:"SCHD", price:89, qty:60, target:50 }
-  ]
+function saveKey(){
+ API_KEY = document.getElementById("key").value;
+ localStorage.setItem("key",API_KEY);
+ alert("저장됨");
+}
+
+let state = JSON.parse(localStorage.getItem("pf"))||{
+ holdings:[
+  {ticker:"QQQ",price:500,qty:10,target:30,cost:400,holdDays:400},
+  {ticker:"META",price:580,qty:5,target:20,cost:300,holdDays:200},
+  {ticker:"SCHD",price:90,qty:60,target:50,cost:70,holdDays:500}
+ ]
 };
 
-async function fetchPrice(t){ 
-  const r = await fetch(`https://finnhub.io/api/v1/quote?symbol=${t}&token=${API_KEY}`);
-  const d = await r.json(); return d.c;
+async function price(t){
+ try{
+   let r=await fetch(`https://finnhub.io/api/v1/quote?symbol=${t}&token=${API_KEY}`);
+   let d=await r.json();
+   return d.c||0;
+ }catch{return 0;}
 }
-async function fetchFX(){
-  try{
-    const r = await fetch("https://open.er-api.com/v6/latest/USD");
-    const d = await r.json(); fxRate = d.rates.KRW;
-    document.getElementById("fx").innerText = `환율 $1 = ₩${fxRate.toLocaleString('ko-KR',{maximumFractionDigits:2})}`;
-  }catch{ document.getElementById("fx").innerText = "환율 실패"; }
+
+async function news(t){
+ try{
+  let to=new Date().toISOString().slice(0,10);
+  let from=new Date(Date.now()-5*86400000).toISOString().slice(0,10);
+  let r=await fetch(`https://finnhub.io/api/v1/company-news?symbol=${t}&from=${from}&to=${to}&token=${API_KEY}`);
+  let d=await r.json();
+
+  let seen=new Set();
+  return d.filter(x=>{
+    if(!x.headline || seen.has(x.headline)) return false;
+    seen.add(x.headline);
+    return true;
+  }).slice(0,3);
+
+ }catch{return [];}
 }
-async function updatePrices(){
-  for(let h of state.holdings){ if(!h.ticker) continue;
-    try{ const p = await fetchPrice(h.ticker); if(p) h.price = p; }catch(e){}
-  } render();
-}
-function add(){ state.holdings.push({ticker:"",price:0,qty:0,target:0}); render(); }
-function del(i){ state.holdings.splice(i,1); render(); }
-function save(){ localStorage.setItem("portfolio", JSON.stringify(state)); alert("저장됨"); }
-function reset(){ localStorage.removeItem("portfolio"); location.reload(); }
 
-function render(){
-  const tbody = document.getElementById("tbody"); tbody.innerHTML="";
-  let cash = +document.getElementById("cash").value || 0;
-  let minQty = +document.getElementById("minQty").value || 1;
-  let total = cash; state.holdings.forEach(h=> total += h.price*h.qty);
+async function updateAll(){
 
-  let sumTarget = 0; state.holdings.forEach(h=> sumTarget += +h.target||0);
-  document.getElementById("sumWarn").innerText = Math.abs(sumTarget-100)>0.1 ? `⚠ 목표합 ${sumTarget.toFixed(1)}%` : "";
+ if(!API_KEY) return alert("API 키 입력");
 
-  let orderText=""; let buyTotal=0, sellTotal=0;
+ let cash=+document.getElementById("cash").value;
+ let taxLT=+document.getElementById("taxLT").value;
+ let taxST=+document.getElementById("taxST").value;
 
-  state.holdings.forEach((h,i)=>{
-    const value = h.price*h.qty;
-    const currentPct = total ? (value/total*100) : 0;
-    const targetValue = total * (h.target/100);
-    const diff = targetValue - value;
+ let total=cash;
 
-    let orderQty = 0, action="", cls="";
-    // 🔧 핵심 수정: price=0 차단 + floor/ceil
-    if (h.price && h.price > 0 && Math.abs(sumTarget-100) <= 0.1) {
-      const rawQty = diff / h.price;
-      orderQty = diff > 0 
-        ? Math.floor(rawQty / minQty) * minQty
-        : Math.ceil(rawQty / minQty) * minQty;
-      
-      if (Math.abs(orderQty) >= minQty) {
-        if(orderQty > 0){ action = "BUY " + orderQty; cls="buy"; buyTotal += orderQty*h.price; }
-        else { action = "SELL " + Math.abs(orderQty); cls="sell"; sellTotal += Math.abs(orderQty)*h.price; }
-        orderText += `${action} ${h.ticker} @ $${h.price}<br>`;
-      } else { orderQty = 0; }
+ for(let h of state.holdings){
+  h.price=await price(h.ticker);
+  total+=h.price*h.qty;
+  await new Promise(r=>setTimeout(r,350));
+ }
+
+ let buy=0,sell=0,tax=0,orderText="",riskText="";
+
+ for(let h of state.holdings){
+
+  if(!h.price || h.price<=0) continue;
+
+  let val=h.price*h.qty;
+  let target=total*(h.target/100);
+  let diff=target-val;
+
+  let raw = h.price ? diff/h.price : 0;
+  if(!isFinite(raw)) raw=0;
+
+  let qty = diff>0 ? Math.floor(raw) : Math.ceil(raw);
+
+  // BUY 제한
+  if(qty>0){
+    let maxBuy = Math.floor((cash - buy) / h.price);
+    qty = Math.min(qty, maxBuy);
+  }
+
+  // SELL 처리
+  if(qty<0){
+    let sellQty=Math.abs(qty);
+
+    let gain=(h.price-(h.cost||h.price))*sellQty;
+    let rate=(h.holdDays||0)>365?taxLT:taxST;
+    let t=gain>0?gain*rate:0;
+
+    let net = sellQty*h.price - t;
+    if(net<0) continue;
+
+    tax+=t;
+    sell+=sellQty*h.price;
+
+    orderText+=`<div class="sell">SELL ${sellQty} ${h.ticker} @ $${h.price} (Tax $${t.toFixed(0)})</div>`;
+    continue;
+  }
+
+  if(qty>0){
+    buy+=qty*h.price;
+    orderText+=`<div class="buy">BUY ${qty} ${h.ticker} @ $${h.price}</div>`;
+  }
+
+  // 🔥 뉴스 리스크
+  let n=await news(h.ticker);
+  n.forEach(x=>{
+    if(x.headline.match(/lawsuit|crash|drop|investigation|downgrade|SEC|probe|recall/i)){
+      riskText+=`<div class="risk">⚠ ${h.ticker}: ${x.headline}</div>`;
     }
-
-    tbody.innerHTML += `
-    <tr>
-      <td><input class="ticker" value="${h.ticker}" onchange="state.holdings[${i}].ticker=this.value.toUpperCase()"></td>
-      <td>$${h.price}</td>
-      <td><input value="${h.qty}" onchange="state.holdings[${i}].qty=+this.value;render()"></td>
-      <td><input value="${h.target}" onchange="state.holdings[${i}].target=+this.value;render()"></td>
-      <td><b>${currentPct.toFixed(1)}%</b></td>
-      <td>$${value.toLocaleString()}</td>
-      <td>₩${Math.floor(value*fxRate).toLocaleString()}</td>
-      <td>$${targetValue.toFixed(0)}</td>
-      <td>${diff.toFixed(0)}</td>
-      <td class="${cls}">${action}</td>
-      <td><button onclick="del(${i})">X</button></td>
-    </tr>`;
   });
 
-  document.getElementById("total").innerText = "$" + total.toLocaleString();
-  document.getElementById("orders").innerHTML = `
-  BUY: $${Math.floor(buyTotal).toLocaleString()}<br>
-  SELL: $${Math.floor(sellTotal).toLocaleString()}<br>
-  DIFF: $${Math.floor(buyTotal - sellTotal).toLocaleString()}<br><br>
-  ${orderText || "리밸런싱 불필요"}
-  `;
-}
+  await new Promise(r=>setTimeout(r,350));
+ }
 
-fetchFX(); render();
+ document.getElementById("orders").innerHTML =
+  `BUY: $${buy.toLocaleString()} | SELL: $${sell.toLocaleString()}<br><br>${orderText||"리밸런싱 불필요"}`;
+
+ document.getElementById("simulation").innerHTML =
+  `세금: $${tax.toFixed(0)}<br>
+   순현금: $${(sell - buy - tax).toFixed(0)}<br>
+   최종 현금: $${(cash - buy + sell - tax).toFixed(0)}`;
+
+ document.getElementById("risk").innerHTML =
+  riskText || "✓ 최근 주요 리스크 없음";
+
+ localStorage.setItem("pf", JSON.stringify(state));
+}
 </script>
+
 </body>
 </html>
