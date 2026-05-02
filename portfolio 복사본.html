@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Portfolio Manager PRO v4</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  body { font-family: 'IBM Plex Sans KR', sans-serif; background:#070b12; }
+  ::-webkit-scrollbar { width:8px; height:8px } ::-webkit-scrollbar-thumb { background:#2a3242; border-radius:4px }
+ .glass { backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+ .fade-in { animation: fade 0.3s ease-out }
+  @keyframes fade { from { opacity:0; transform: translateY(4px) } to { opacity:1; transform: translateY(0) } }
+</style>
+</head>
+<body class="text-zinc-100 selection:bg-violet-500/30">
+<div class="max-w-[1600px] mx-auto p-3 sm:p-6">
+
+  <!-- 배당락 알림 배너 -->
+  <div id="alertBanner" class="hidden fade-in mb-4 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30">
+    <div class="flex items-start gap-3">
+      <div class="text-2xl">🔔</div>
+      <div class="flex-1">
+        <div class="font-semibold text-amber-300 mb-1">배당락 임박</div>
+        <div id="alertList" class="text-sm text-amber-100/90 space-y-1"></div>
+      </div>
+      <button onclick="document.getElementById('alertBanner').classList.add('hidden')" class="text-amber-300/60 hover:text-amber-200">✕</button>
+    </div>
+  </div>
+
+  <!-- Header -->
+  <header class="flex flex-col gap-4 mb-6">
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-[26px] sm:text-3xl font-bold tracking-tight">Portfolio Manager <span class="text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-cyan-400">PRO v4</span></h1>
+        <p class="text-zinc-400 text-sm mt-0.5">궁극의 한국형 배당 포트폴리오 · v4</p>
+      </div>
+      <div class="hidden sm:flex items-center gap-3">
+        <div class="text-right">
+          <div class="text-xs text-zinc-500">USD/KRW</div>
+          <div id="fxRate" class="text-sm font-medium text-emerald-400">₩1,365</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex flex-wrap gap-2">
+      <button id="btn-api" class="btn">🔑 API키</button>
+      <button id="btn-price" class="btn">🔄 시세갱신</button>
+      <button id="btn-divdate" class="btn">📆 배당일갱신</button>
+      <button id="btn-yield" class="btn">📊 배당률업데이트</button>
+      <button id="btn-krw" class="btn">₩ 토글</button>
+      <button id="btn-notif" class="btn relative">
+        <span id="notifDot" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-zinc-600 ring-2 ring-[#070b12]"></span>
+        🔔 알림 허용
+      </button>
+      <button id="btn-ics" class="btn">📅 캘린더 내보내기</button>
+      <button id="btn-csv" class="btn">💾 CSV</button>
+      <button id="btn-settings" class="btn">⚙️ 설정</button>
+    </div>
+  </header>
+
+  <div class="grid grid-cols-1 xl:grid-cols-[1fr_380px] gap-5">
+    <div class="space-y-5">
+      <div class="p-4 sm:p-5 rounded-3xl bg-zinc-900/60 border border-zinc-800 glass">
+        <div class="flex flex-wrap gap-2.5 items-end">
+          <div>
+            <label class="text-xs text-zinc-400">종목코드</label>
+            <input id="inpTicker" placeholder="JEPI" class="w-28 px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-sm outline-none focus:border-violet-500">
+          </div>
+          <div>
+            <label class="text-xs text-zinc-400">수량</label>
+            <input id="inpShares" type="number" placeholder="200" class="w-24 px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-sm outline-none focus:border-violet-500">
+          </div>
+          <div>
+            <label class="text-xs text-zinc-400">매입가($)</label>
+            <input id="inpPrice" type="number" step="0.01" placeholder="55.20" class="w-28 px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-sm outline-none focus:border-violet-500">
+          </div>
+          <button id="btn-add" class="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-sm font-medium">추가</button>
+          <div class="text-xs text-zinc-500 ml-1">* 기본 포트폴리오: JEPI 200주, QQQM 150주</div>
+        </div>
+      </div>
+
+      <div class="rounded-3xl bg-zinc-900/60 border border-zinc-800 overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-[13px]">
+            <thead class="bg-zinc-950/70 border-b border-zinc-800 text-zinc-400">
+              <tr class="[&>th]:px-3 [&>th]:py-2.5 [&>th]:text-left [&>th]:font-medium whitespace-nowrap">
+                <th>종목</th>
+                <th class="text-right">수량</th>
+                <th class="text-right">현재가</th>
+                <th class="text-right">매입가</th>
+                <th class="text-right">배당률</th>
+                <th class="text-right">평가금액</th>
+                <th class="text-right">비중</th>
+                <th class="text-right">연배당</th>
+                <th class="text-right">손익</th>
+                <th>다음 배당락</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="tblBody" class="divide-y divide-zinc-800/70"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="space-y-5">
+      <div class="p-5 rounded-3xl bg-gradient-to-b from-zinc-900 to-zinc-900/60 border border-zinc-800">
+        <h3 class="font-semibold mb-3">포트폴리오 요약</h3>
+        <div class="space-y-2.5 text-sm">
+          <div class="flex justify-between"><span class="text-zinc-400">총 평가액</span><span id="sumValue" class="font-medium">-</span></div>
+          <div class="flex justify-between"><span class="text-zinc-400">총 매입액</span><span id="sumCost" class="font-medium">-</span></div>
+          <div class="pt-2.5 border-t border-zinc-800">
+            <div class="text-zinc-400 text-xs mb-1">총 손익</div>
+            <div id="sumProfit" class="text-lg font-semibold leading-tight">-</div>
+            <div id="sumProfitKRW" class="text-sm text-zinc-400">-</div>
+          </div>
+          <div class="pt-2.5 border-t border-zinc-800">
+            <div class="flex justify-between"><span class="text-zinc-400">연 배당</span><span id="sumDiv" class="font-medium text-emerald-400">-</span></div>
+            <div class="flex justify-between"><span class="text-zinc-400">배당수익률</span><span id="sumYield" class="font-medium">-</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="p-5 rounded-3xl bg-zinc-900/60 border border-zinc-800">
+        <h3 class="font-semibold mb-3">보유 비중</h3>
+        <div class="h-[220px] flex items-center justify-center"><canvas id="pieChart"></canvas></div>
+      </div>
+
+      <div class="p-5 rounded-3xl bg-zinc-900/60 border border-zinc-800">
+        <h3 class="font-semibold mb-3">리밸런싱 제안</h3>
+        <div id="rebalanceList" class="text-xs space-y-1.5 text-zinc-300"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modals -->
+<div id="modalApi" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+  <div class="w-full max-w-md p-6 rounded-3xl bg-zinc-900 border border-zinc-800">
+    <h3 class="text-lg font-semibold mb-3">Finnhub API 키</h3>
+    <p class="text-sm text-zinc-400 mb-3">시세/배당률/배당일 갱신에 필요합니다. (무료키 가능)</p>
+    <input id="apiKeyInput" class="w-full px-3 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-sm outline-none" placeholder="API 키 입력">
+    <div class="flex gap-2 mt-4">
+      <button id="apiSave" class="flex-1 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-sm font-medium">저장</button>
+      <button onclick="closeModal('modalApi')" class="px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm">닫기</button>
+    </div>
+  </div>
+</div>
+
+<div id="modalSettings" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+  <div class="w-full max-w-md p-6 rounded-3xl bg-zinc-900 border border-zinc-800 max-h-[90vh] overflow-y-auto">
+    <h3 class="text-lg font-semibold mb-4">설정</h3>
+    <div class="space-y-4">
+      <label class="flex items-center justify-between">
+        <span class="text-sm">배당락 알림 활성화</span>
+        <input id="setNotif" type="checkbox" class="w-5 h-5 accent-violet-600">
+      </label>
+      <div>
+        <label class="text-sm text-zinc-400">알림 기준 (일 전)</label>
+        <input id="setWarn" type="number" min="1" max="7" class="mt-1 w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-sm">
+      </div>
+
+      <div class="pt-4 border-t border-zinc-800">
+        <label class="text-sm font-medium mb-2 block">리밸런싱 목표 비중 (%)</label>
+        <div id="targetInputs" class="space-y-2 text-sm"></div>
+        <p class="text-[11px] text-zinc-500 mt-2">합계 100% 권장. 미설정 종목은 제외됩니다.</p>
+      </div>
+
+      <div class="pt-3 border-t border-zinc-800">
+        <button id="btnReset" class="w-full py-2.5 rounded-xl bg-red-600/20 hover:bg-red-600/30 text-red-300 text-sm">포트폴리오 초기화</button>
+      </div>
+    </div>
+    <div class="flex gap-2 mt-5">
+      <button id="setSave" class="flex-1 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-sm font-medium">저장</button>
+      <button onclick="closeModal('modalSettings')" class="px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm">닫기</button>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="fileCsv" accept=".csv" class="hidden">
+
+<script>
+const $ = s => document.querySelector(s);
+const fmtUSD0 = new Intl.NumberFormat('en-US', {style:'currency', currency:'USD', maximumFractionDigits:0});
+const fmtUSD2 = new Intl.NumberFormat('en-US', {style:'currency', currency:'USD', minimumFractionDigits:2});
+const fmtKRW0 = new Intl.NumberFormat('ko-KR', {style:'currency', currency:'KRW', maximumFractionDigits:0});
+const fmtPct = new Intl.NumberFormat('ko-KR', {maximumFractionDigits:1});
+const fmtNum = new Intl.NumberFormat('ko-KR');
+
+let holdings = [];
+let apiKey = localStorage.getItem('pmpro_apikey') || '';
+let usdkrw = parseFloat(localStorage.getItem('pmpro_fx') || '1365');
+let settings = JSON.parse(localStorage.getItem('pmpro_settings') || '{"notifEnabled":true,"krwEnabled":true,"warnDays":3}');
+let pie;
+
+const DEFAULTS = [
+  { ticker:'JEPI', shares:200, avgPrice:55.20, currentPrice:56.82, yield:0.0785, exDate:'2025-12-03' },
+  { ticker:'QQQM', shares:150, avgPrice:178.50, currentPrice:198.40, yield:0.0062, exDate:'2025-12-19' },
+  { ticker:'SCHD', shares:120, avgPrice:78.10, currentPrice:82.45, yield:0.0345, exDate:'2025-12-11' },
+  { ticker:'JEPQ', shares:80, avgPrice:52.30, currentPrice:54.10, yield:0.092, exDate:'2025-12-02' },
+];
+
+document.addEventListener('DOMContentLoaded', init);
+
+async function init() {
+  holdings = JSON.parse(localStorage.getItem('pmpro_v4') || 'null') || DEFAULTS;
+  updateFxDisplay();
+  render();
+  bindEvents();
+  updateNotifDot();
+  fetchFx();
+  checkDividendAlerts();
+}
+
+function bindEvents() {
+  $('#btn-api').onclick = () => { $('#apiKeyInput').value = apiKey; openModal('modalApi'); };
+  $('#apiSave').onclick = () => { apiKey = $('#apiKeyInput').value.trim(); localStorage.setItem('pmpro_apikey', apiKey); closeModal('modalApi'); };
+  $('#btn-price').onclick = fetchPrices;
+  $('#btn-yield').onclick = fetchYields;
+  $('#btn-divdate').onclick = fetchExDates;
+  $('#btn-krw').onclick = toggleKRW;
+  $('#btn-notif').onclick = requestNotif;
+  $('#btn-ics').onclick = exportICS;
+  $('#btn-csv').onclick = () => { if(confirm('내보내기: 확인 / 가져오기: 취소')) exportCSV(); else $('#fileCsv').click(); };
+  $('#fileCsv').onchange = importCSV;
+  $('#btn-settings').onclick = () => {
+    $('#setNotif').checked = settings.notifEnabled;
+    $('#setWarn').value = settings.warnDays;
+    const targets = JSON.parse(localStorage.getItem('pmpro_targets') || '{"QQQ":20,"META":15,"SCHD":25,"JEPI":20,"QQQM":20}');
+    const container = $('#targetInputs');
+    container.innerHTML = '';
+    holdings.forEach(h => {
+      const val = targets[h.ticker] || 0;
+      container.innerHTML += `
+        <div class="flex items-center justify-between gap-2">
+          <span class="w-16">${h.ticker}</span>
+          <input data-ticker="${h.ticker}" type="number" min="0" max="100" value="${val}" class="w-20 px-2 py-1.5 bg-zinc-950 border border-zinc-800 rounded-lg text-right text-sm">
+          <span class="text-zinc-500">%</span>
+        </div>`;
+    });
+    openModal('modalSettings');
+  };
+  $('#setSave').onclick = saveSettings;
+  $('#btnReset').onclick = resetPortfolio;
+  $('#btn-add').onclick = addHolding;
+}
+
+function openModal(id){ $(`#${id}`).classList.remove('hidden'); }
+function closeModal(id){ $(`#${id}`).classList.add('hidden'); }
+function saveData(){ localStorage.setItem('pmpro_v4', JSON.stringify(holdings)); }
+function saveSettings(){
+  settings.notifEnabled = $('#setNotif').checked;
+  settings.warnDays = parseInt($('#setWarn').value)||3;
+  localStorage.setItem('pmpro_settings', JSON.stringify(settings));
+
+  const targets = {};
+  document.querySelectorAll('#targetInputs input[data-ticker]').forEach(inp => {
+    const ticker = inp.dataset.ticker;
+    const val = parseFloat(inp.value) || 0;
+    if(val > 0) targets[ticker] = val;
+  });
+  localStorage.setItem('pmpro_targets', JSON.stringify(targets));
+
+  closeModal('modalSettings');
+  updateNotifDot();
+  checkDividendAlerts();
+  render();
+}
+
+function toggleKRW(){
+  settings.krwEnabled =!settings.krwEnabled;
+  localStorage.setItem('pmpro_settings', JSON.stringify(settings));
+  render();
+}
+function updateFxDisplay(){ $('#fxRate').textContent = fmtKRW0.format(usdkrw); }
+async function fetchFx(){
+  try {
+    const r = await fetch('https://open.er-api.com/v6/latest/USD');
+    const j = await r.json();
+    if(j.rates?.KRW){ usdkrw = j.rates.KRW; localStorage.setItem('pmpro_fx', usdkrw); updateFxDisplay(); render(); }
+  } catch(e){ console.warn('FX fail', e); }
+}
+
+async function requestNotif(){
+  if(!('Notification' in window)) return alert('브라우저가 알림을 지원하지 않습니다.');
+  const perm = await Notification.requestPermission();
+  updateNotifDot();
+  if(perm === 'granted' && settings.notifEnabled) checkDividendAlerts();
+}
+function updateNotifDot(){
+  const dot = $('#notifDot');
+  const enabled = settings.notifEnabled && Notification.permission === 'granted';
+  dot.className = `absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full ring-2 ring-[#070b12] ${enabled? 'bg-emerald-500' : 'bg-zinc-600'}`;
+}
+
+function checkDividendAlerts(){
+  if(!settings.notifEnabled) return;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const warns = [];
+  holdings.forEach(h => {
+    if(!h.exDate) return;
+    const ex = new Date(h.exDate);
+    const diff = Math.ceil((ex - today) / 86400000);
+    if(diff >= 0 && diff <= settings.warnDays){
+      warns.push({...h, dDay:diff});
+      const key = `notif_${h.ticker}_${h.exDate}`;
+      const last = localStorage.getItem(key);
+      const todayStr = today.toISOString().slice(0,10);
+      if(last!== todayStr && Notification.permission === 'granted'){
+        new Notification(`${h.ticker} 배당락 D-${diff}`, { body: `${formatDate(h.exDate)} 매수 마감`, icon:'' });
+        localStorage.setItem(key, todayStr);
+      }
+    }
+  });
+  if(warns.length){
+    $('#alertBanner').classList.remove('hidden');
+    $('#alertList').innerHTML = warns.map(w =>
+      `<div>• <b>${w.ticker}</b> 배당락 <span class="text-amber-300">D-${w.dDay}</span> — ${formatDate(w.exDate)} 매수 마감 (보유 ${w.shares}주)</div>`
+    ).join('');
+  }
+}
+function formatDate(d){ const dt = new Date(d); return `${dt.getMonth()+1}/${dt.getDate()}`; }
+
+function render(){
+  const tbody = $('#tblBody');
+  tbody.innerHTML = '';
+  let totalValue=0, totalCost=0, totalDiv=0;
+
+  holdings.forEach((h,i)=>{
+    const value = (h.currentPrice||0) * h.shares;
+    const cost = (h.avgPrice||0) * h.shares;
+    const profit = value - cost;
+    const profitPct = cost? profit/cost*100 : 0;
+    totalValue += value; totalCost += cost; totalDiv += value * (h.yield||0);
+
+    const tr = document.createElement('tr');
+    tr.className = 'hover:bg-zinc-800/40 [&>td]:px-3 [&>td]:py-2.5';
+    const profitUSD = `${profit>=0?'+':''}${fmtUSD0.format(profit)} (${profitPct>=0?'+':''}${fmtPct.format(profitPct)}%)`;
+    const profitKRW = settings.krwEnabled? `<div class="text-[11px] text-zinc-500">${profit>=0?'+':''}${fmtKRW0.format(profit*usdkrw)}</div>` : '';
+    const valueKRW = settings.krwEnabled? `<div class="text-[11px] text-zinc-500">${fmtKRW0.format(value*usdkrw)}</div>` : '';
+    const divKRW = settings.krwEnabled? `<div class="text-[11px] text-zinc-500">${fmtKRW0.format(value*(h.yield||0)*usdkrw)}</div>` : '';
+
+    tr.innerHTML = `
+      <td><div class="font-semibold">${h.ticker}</div></td>
+      <td class="text-right">${fmtNum.format(h.shares)}</td>
+      <td class="text-right">${fmtUSD2.format(h.currentPrice||0)}</td>
+      <td class="text-right">${fmtUSD2.format(h.avgPrice||0)}</td>
+      <td class="text-right ${h.yield>0.07?'text-emerald-400':''}">${h.yield?fmtPct.format(h.yield*100)+'%':'-'}</td>
+      <td class="text-right"><div>${fmtUSD0.format(value)}</div>${valueKRW}</td>
+      <td class="text-right" data-weight>${'-'}</td>
+      <td class="text-right"><div class="text-emerald-400">${fmtUSD0.format(value*(h.yield||0))}</div>${divKRW}</td>
+      <td class="text-right"><div class="${profit>=0?'text-emerald-400':'text-red-400'}">${profitUSD}</div>${profitKRW}</td>
+      <td>${h.exDate? `<span class="px-2 py-1 rounded-lg bg-zinc-800 text-[11px]">${h.exDate}</span>` : '-'}</td>
+      <td class="text-right"><button onclick="delHolding(${i})" class="text-zinc-500 hover:text-red-400">삭제</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  [...tbody.querySelectorAll('[data-weight]')].forEach((td,idx)=>{
+    const h = holdings[idx];
+    const w = totalValue? (h.currentPrice*h.shares/totalValue*100) : 0;
+    td.textContent = fmtPct.format(w)+'%';
+  });
+
+  const totalProfit = totalValue - totalCost;
+  const totalProfitPct = totalCost? totalProfit/totalCost*100 : 0;
+  $('#sumValue').innerHTML = `${fmtUSD0.format(totalValue)} <span class="text-zinc-500 text-xs">/ ${fmtKRW0.format(totalValue*usdkrw)}</span>`;
+  $('#sumCost').innerHTML = `${fmtUSD0.format(totalCost)} <span class="text-zinc-500 text-xs">/ ${fmtKRW0.format(totalCost*usdkrw)}</span>`;
+  $('#sumProfit').innerHTML = `<span class="${totalProfit>=0?'text-emerald-400':'text-red-400'}">${totalProfit>=0?'+':''}${fmtUSD0.format(totalProfit)} (${totalProfitPct>=0?'+':''}${fmtPct.format(totalProfitPct)}%)</span>`;
+  $('#sumProfitKRW').textContent = `/ ${totalProfit>=0?'+':''}${fmtKRW0.format(totalProfit*usdkrw)}`;
+  $('#sumDiv').textContent = fmtUSD0.format(totalDiv);
+  $('#sumYield').textContent = totalValue? fmtPct.format(totalDiv/totalValue*100)+'%' : '-';
+
+  renderPie();
+  renderRebalance(totalValue);
+  saveData();
+}
+
+function renderPie(){
+  const ctx = $('#pieChart');
+  const labels = holdings.map(h=>h.ticker);
+  const data = holdings.map(h=> (h.currentPrice||0)*h.shares);
+  const colors = ['#8b5cf6','#06b6d4','#10b981','#f59e0b','#ef4444','#3b82f6'];
+  if(pie) pie.destroy();
+  pie = new Chart(ctx, {
+    type:'doughnut',
+    data:{ labels, datasets:[{ data, backgroundColor:colors, borderWidth:0, hoverOffset:8 }] },
+    options:{ plugins:{ legend:{ position:'bottom', labels:{ color:'#a1a1aa', font:{size:12}, boxWidth:12 } } }, cutout:'65%' }
+  });
+}
+
+function renderRebalance(total){
+  const targets = JSON.parse(localStorage.getItem('pmpro_targets') || '{"QQQ":20,"META":15,"SCHD":25,"JEPI":20,"QQQM":20}');
+
+  const list = [];
+  let totalBuy = 0, totalSell = 0;
+
+  holdings.forEach(h => {
+    const value = h.currentPrice * h.shares;
+    const weight = total? value / total * 100 : 0;
+    const target = targets[h.ticker] || 0;
+
+    if(target === 0 ||!h.currentPrice){
+      list.push(`<div class="flex justify-between py-1 border-b border-zinc-800/50 last:border-0"><span class="text-zinc-500">${h.ticker}</span><span class="text-zinc-600 text-[11px]">목표 미설정</span></div>`);
+      return;
+    }
+
+    const targetValue = total * target / 100;
+    const diff = targetValue - value;
+
+    const shares = diff > 0
+     ? Math.floor(diff / h.currentPrice)
+      : Math.ceil(diff / h.currentPrice);
+
+    let action = `<span class="text-zinc-500">유지</span>`;
+    let detail = '';
+
+    if(Math.abs(shares) >= 1){
+      if(shares > 0){
+        action = `<span class="text-emerald-400 font-medium">매수 ${shares}주</span>`;
+        totalBuy += shares * h.currentPrice;
+        detail = `<div class="text-[10px] text-zinc-500">${fmtUSD0.format(shares*h.currentPrice)}</div>`;
+      } else {
+        action = `<span class="text-red-400 font-medium">매도 ${Math.abs(shares)}주</span>`;
+        totalSell += Math.abs(shares) * h.currentPrice;
+        detail = `<div class="text-[10px] text-zinc-500">${fmtUSD0.format(Math.abs(shares)*h.currentPrice)}</div>`;
+      }
+    }
+
+    list.push(`
+      <div class="py-2 border-b border-zinc-800/50 last:border-0">
+        <div class="flex justify-between items-start">
+          <div>
+            <span class="font-medium">${h.ticker}</span>
+            <span class="ml-2 text-[11px] text-zinc-500">현재 ${fmtPct.format(weight)}% → 목표 ${target}%</span>
+          </div>
+          <div class="text-right">${action}${detail}</div>
+        </div>
+      </div>
+    `);
+  });
+
+  if(totalBuy > 0 || totalSell > 0){
+    list.push(`
+      <div class="pt-2 mt-2 border-t border-zinc-700 text-[11px]">
+        <div class="flex justify-between text-emerald-400"><span>총 매수</span><span>${fmtUSD0.format(totalBuy)}</span></div>
+        <div class="flex justify-between text-red-400"><span>총 매도</span><span>${fmtUSD0.format(totalSell)}</span></div>
+      </div>
+    `);
+  }
+
+  $('#rebalanceList').innerHTML = list.join('') || '<span class="text-zinc-500">데이터 없음</span>';
+}
+
+function addHolding(){
+  const ticker = $('#inpTicker').value.trim().toUpperCase();
+  const shares = parseFloat($('#inpShares').value);
+  const avg = parseFloat($('#inpPrice').value);
+  if(!ticker ||!shares) return alert('종목과 수량을 입력하세요');
+  const exist = holdings.find(h=>h.ticker===ticker);
+  if(exist){ exist.shares += shares; if(avg) exist.avgPrice = avg; }
+  else holdings.push({ ticker, shares, avgPrice:avg||0, currentPrice:avg||0, yield:0, exDate:'' });
+  $('#inpTicker').value=''; $('#inpShares').value=''; $('#inpPrice').value='';
+  render();
+}
+function delHolding(i){ if(confirm('삭제하시겠습니까?')){ holdings.splice(i,1); render(); } }
+function resetPortfolio(){ if(confirm('초기화하시겠습니까?')){ holdings = JSON.parse(JSON.stringify(DEFAULTS)); saveData(); render(); closeModal('modalSettings'); } }
+
+async function fetchPrices(){
+  if(!apiKey) return openModal('modalApi');
+  for(const h of holdings){
+    try{
+      const r = await fetch(`https://finnhub.io/api/v1/quote?symbol=${h.ticker}&token=${apiKey}`);
+      const j = await r.json();
+      if(j.c) h.currentPrice = j.c;
+    }catch(e){ console.warn(e); }
+    await sleep(350);
+  }
+  render();
+}
+async function fetchYields(){
+  if(!apiKey) return openModal('modalApi');
+  for(const h of holdings){
+    try{
+      const r = await fetch(`https://finnhub.io/api/v1/stock/metric?symbol=${h.ticker}&metric=all&token=${apiKey}`);
+      const j = await r.json();
+      const y = j.metric?.dividendYieldIndicatedAnnual;
+      if(y) h.yield = y>1? y/100 : y;
+    }catch(e){}
+    await sleep(350);
+  }
+  render();
+}
+async function fetchExDates(){
+  if(!apiKey) return openModal('modalApi');
+  const from = new Date().toISOString().slice(0,10);
+  const to = new Date(Date.now()+365*86400000).toISOString().slice(0,10);
+  try{
+    const r = await fetch(`https://finnhub.io/api/v1/calendar/dividend?from=${from}&to=${to}&token=${apiKey}`);
+    const j = await r.json();
+    holdings.forEach(h=>{
+      const found = j.calendar?.filter(c=>c.symbol===h.ticker).sort((a,b)=> new Date(a.exDate)-new Date(b.exDate))[0];
+      if(found) h.exDate = found.exDate;
+    });
+  }catch(e){}
+  render(); checkDividendAlerts();
+}
+
+function exportICS(){
+  const monthly = ['JEPI','JEPQ','XYLD','QYLD'];
+  const quarterly = ['SCHD','QQQM','VOO','SPY','DGRO'];
+  let ics = `BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//Portfolio Manager PRO v4//KR\nCALSCALE:GREGORIAN\nX-WR-CALNAME:배당락 캘린더\n`;
+  const now = new Date();
+  const stamp = now.toISOString().replace(/[-:]/g,'').split('.')[0]+'Z';
+
+  holdings.forEach(h=>{
+    const freq = monthly.includes(h.ticker)? 1 : quarterly.includes(h.ticker)? 3 : 3;
+    let base = h.exDate? new Date(h.exDate) : new Date();
+    for(let i=0;i<12;i++){
+      const d = new Date(base);
+      d.setMonth(d.getMonth() + i*freq);
+      if(d < now) continue;
+      const ymd = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+      const annualDiv = (h.currentPrice||0) * (h.yield||0);
+      const perDiv = annualDiv / (12/freq);
+      const est = perDiv * h.shares;
+      ics += `BEGIN:VEVENT\nUID:${h.ticker}-${ymd}@pmpro\nDTSTAMP:${stamp}\nDTSTART;VALUE=DATE:${ymd}\nSUMMARY:${h.ticker} 배당락\nDESCRIPTION:예상 배당금 ${fmtUSD2.format(est)} / 보유 ${h.shares}주 / 배당률 ${fmtPct.format((h.yield||0)*100)}%\nEND:VEVENT\n`;
+    }
+  });
+  ics += 'END:VCALENDAR';
+
+  const blob = new Blob([ics], {type:'text/calendar'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `dividends-${new Date().getFullYear()}.ics`;
+  a.click();
+}
+
+function exportCSV(){
+  const header = 'ticker,shares,avgPrice,currentPrice,yield,exDate\n';
+  const rows = holdings.map(h=> [h.ticker, h.shares, h.avgPrice, h.currentPrice, h.yield, h.exDate||''].join(',')).join('\n');
+  const blob = new Blob([header+rows], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'portfolio-pro-v4.csv';
+  a.click();
+}
+function importCSV(e){
+  const f = e.target.files[0]; if(!f) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const lines = reader.result.split('\n').slice(1);
+    holdings = lines.filter(l=>l.trim()).map(l=>{
+      const [ticker,shares,avgPrice,currentPrice,yld,exDate] = l.split(',');
+      return { ticker:ticker.trim().toUpperCase(), shares:+shares||0, avgPrice:+avgPrice||0, currentPrice:+currentPrice||+avgPrice||0, yield:+yld||0, exDate:exDate?.trim()||'' };
+    });
+    render();
+  };
+  reader.readAsText(f);
+}
+
+const sleep = ms => new Promise(r=>setTimeout(r,ms));
+const css = `.btn{padding:.45rem.75rem;border-radius:.75rem;background:rgb(24 24 27 /.9);border:1px solid rgb(39 39 42);font-size:13px;display:flex;align-items:center;gap:.35rem;transition:.2s}.btn:hover{background:rgb(39 39 42)}`;
+const s = document.createElement('style'); s.textContent = css; document.head.appendChild(s);
+</script>
+</body>
+</html>
