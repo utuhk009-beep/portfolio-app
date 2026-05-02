@@ -1,57 +1,71 @@
 <!DOCTYPE html>
-
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Portfolio Manager PRO</title>
-
 <style>
-body { font-family: sans-serif; margin:0; background:#f5f7fa; }
+body { font-family:-apple-system; background:#f5f6f8; margin:0; font-size:16px; }
 .container { max-width:1100px; margin:auto; padding:20px; }
-h1 { margin-bottom:10px; }
-button { padding:6px 10px; margin:5px; cursor:pointer; }
-input { width:80px; }
-table { width:100%; border-collapse:collapse; margin-top:15px; }
-th, td { border-bottom:1px solid #ddd; padding:8px; text-align:center; }
-th { background:#eee; }
-.green { color:green; }
-.red { color:red; }
-.summary { margin-top:15px; padding:10px; background:#fff; }
+h1 { font-size:24px; margin:0; }
+.card { background:#fff; border-radius:12px; padding:18px; margin-top:14px; box-shadow:0 1px 3px rgba(0,0,0,.05); }
+table { width:100%; border-collapse:collapse; }
+th, td { padding:12px; text-align:center; border-bottom:1px solid #eee; }
+th { font-size:14px; color:#64748b; text-transform:uppercase; }
+input { width:80px; padding:6px; font-size:16px; text-align:right; border:1px solid #ddd; border-radius:6px; }
+input.ticker { text-align:center; text-transform:uppercase; font-weight:600; }
+.btn { padding:8px 14px; border-radius:8px; border:none; cursor:pointer; font-size:15px; }
+.primary { background:#111; color:#fff; }
+.gray { background:#e5e7eb; }
+.buy { color:#059669; font-weight:700; }
+.sell { color:#dc2626; font-weight:700; }
+.topbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+.warn { color:#dc2626; font-weight:700; margin-left:10px; }
 </style>
-
 </head>
-
 <body>
 <div class="container">
-<h1>📊 포트폴리오 관리자</h1>
-
-<button onclick="add()">+ 종목 추가</button> <button onclick="save()">💾 저장</button> <button onclick="reset()">초기화</button>
-
-<div class="summary">
-총 자산: $<span id="total">0</span>
+<div class="topbar">
+<h1>📊 Portfolio Manager PRO</h1>
+<div id="fx">환율 로딩중...</div>
 </div>
 
-<table id="table">
+<div class="card">
+총 자산: <b id="total"></b> <span id="sumWarn" class="warn"></span>
+<br><br>
+현금: $<input id="cash" value="10000">
+최소 주문수량: <input id="minQty" value="1">
+<button class="btn primary" onclick="updatePrices()">🔄 가격 업데이트</button>
+</div>
+
+<div class="card">
+<button class="btn primary" onclick="add()">+ 종목 추가</button>
+<button class="btn gray" onclick="save()">저장</button>
+<button class="btn gray" onclick="reset()">초기화</button>
+</div>
+
+<div class="card">
+<table>
 <thead>
 <tr>
-<th>티커</th>
-<th>가격</th>
-<th>수량</th>
-<th>평가금액</th>
-<th>현재%</th>
-<th>목표%</th>
-<th>차이%</th>
-<th>주문</th>
-<th>삭제</th>
+<th>티커</th><th>현재가</th><th>수량</th><th>목표%</th><th>현재%</th>
+<th>평가금액</th><th>KRW</th><th>목표금액</th><th>차액</th><th>주문</th><th></th>
 </tr>
 </thead>
-<tbody></tbody>
+<tbody id="tbody"></tbody>
 </table>
+</div>
 
+<div class="card">
+<h3>ORDER LIST</h3>
+<div id="orders" style="font-family:ui-monospace; line-height:1.6;"></div>
+</div>
 </div>
 
 <script>
+const API_KEY = "여기에_API키";
+let fxRate = 1350;
+
 let state = JSON.parse(localStorage.getItem("portfolio")) || {
   holdings: [
     { ticker:"QQQ", price:508, qty:10, target:30 },
@@ -60,86 +74,85 @@ let state = JSON.parse(localStorage.getItem("portfolio")) || {
   ]
 };
 
-function calc() {
-  // 평가금액
-  state.holdings.forEach(h => {
-    h.value = h.price * h.qty;
+async function fetchPrice(t){ 
+  const r = await fetch(`https://finnhub.io/api/v1/quote?symbol=${t}&token=${API_KEY}`);
+  const d = await r.json(); return d.c;
+}
+async function fetchFX(){
+  try{
+    const r = await fetch("https://open.er-api.com/v6/latest/USD");
+    const d = await r.json(); fxRate = d.rates.KRW;
+    document.getElementById("fx").innerText = `환율 $1 = ₩${fxRate.toLocaleString('ko-KR',{maximumFractionDigits:2})}`;
+  }catch{ document.getElementById("fx").innerText = "환율 실패"; }
+}
+async function updatePrices(){
+  for(let h of state.holdings){ if(!h.ticker) continue;
+    try{ const p = await fetchPrice(h.ticker); if(p) h.price = p; }catch(e){}
+  } render();
+}
+function add(){ state.holdings.push({ticker:"",price:0,qty:0,target:0}); render(); }
+function del(i){ state.holdings.splice(i,1); render(); }
+function save(){ localStorage.setItem("portfolio", JSON.stringify(state)); alert("저장됨"); }
+function reset(){ localStorage.removeItem("portfolio"); location.reload(); }
+
+function render(){
+  const tbody = document.getElementById("tbody"); tbody.innerHTML="";
+  let cash = +document.getElementById("cash").value || 0;
+  let minQty = +document.getElementById("minQty").value || 1;
+  let total = cash; state.holdings.forEach(h=> total += h.price*h.qty);
+
+  let sumTarget = 0; state.holdings.forEach(h=> sumTarget += +h.target||0);
+  document.getElementById("sumWarn").innerText = Math.abs(sumTarget-100)>0.1 ? `⚠ 목표합 ${sumTarget.toFixed(1)}%` : "";
+
+  let orderText=""; let buyTotal=0, sellTotal=0;
+
+  state.holdings.forEach((h,i)=>{
+    const value = h.price*h.qty;
+    const currentPct = total ? (value/total*100) : 0;
+    const targetValue = total * (h.target/100);
+    const diff = targetValue - value;
+
+    let orderQty = 0, action="", cls="";
+    // 🔧 핵심 수정: price=0 차단 + floor/ceil
+    if (h.price && h.price > 0 && Math.abs(sumTarget-100) <= 0.1) {
+      const rawQty = diff / h.price;
+      orderQty = diff > 0 
+        ? Math.floor(rawQty / minQty) * minQty
+        : Math.ceil(rawQty / minQty) * minQty;
+      
+      if (Math.abs(orderQty) >= minQty) {
+        if(orderQty > 0){ action = "BUY " + orderQty; cls="buy"; buyTotal += orderQty*h.price; }
+        else { action = "SELL " + Math.abs(orderQty); cls="sell"; sellTotal += Math.abs(orderQty)*h.price; }
+        orderText += `${action} ${h.ticker} @ $${h.price}<br>`;
+      } else { orderQty = 0; }
+    }
+
+    tbody.innerHTML += `
+    <tr>
+      <td><input class="ticker" value="${h.ticker}" onchange="state.holdings[${i}].ticker=this.value.toUpperCase()"></td>
+      <td>$${h.price}</td>
+      <td><input value="${h.qty}" onchange="state.holdings[${i}].qty=+this.value;render()"></td>
+      <td><input value="${h.target}" onchange="state.holdings[${i}].target=+this.value;render()"></td>
+      <td><b>${currentPct.toFixed(1)}%</b></td>
+      <td>$${value.toLocaleString()}</td>
+      <td>₩${Math.floor(value*fxRate).toLocaleString()}</td>
+      <td>$${targetValue.toFixed(0)}</td>
+      <td>${diff.toFixed(0)}</td>
+      <td class="${cls}">${action}</td>
+      <td><button onclick="del(${i})">X</button></td>
+    </tr>`;
   });
 
-  // 총자산
-  const total = state.holdings.reduce((s, h) => s + h.value, 0);
-
-  // 비중 + 차이 + 주문수량
-  state.holdings.forEach(h => {
-    h.weight = total ? (h.value / total) * 100 : 0;
-    h.diff = h.weight - h.target;
-
-    const targetValue = total * (h.target / 100);
-    const gap = targetValue - h.value;
-    h.order = Math.round(gap / h.price);
-  });
-
-  return total;
+  document.getElementById("total").innerText = "$" + total.toLocaleString();
+  document.getElementById("orders").innerHTML = `
+  BUY: $${Math.floor(buyTotal).toLocaleString()}<br>
+  SELL: $${Math.floor(sellTotal).toLocaleString()}<br>
+  DIFF: $${Math.floor(buyTotal - sellTotal).toLocaleString()}<br><br>
+  ${orderText || "리밸런싱 불필요"}
+  `;
 }
 
-function render() {
-  const tbody = document.querySelector("#table tbody");
-  const total = calc();
-
-  document.getElementById("total").innerText = total.toLocaleString();
-
-  tbody.innerHTML = "";
-
-  state.holdings.forEach((h, i) => {
-    const tr = document.createElement("tr");
-
-    tr.innerHTML = `
-<td><input value="${h.ticker}" onchange="update(${i}, 'ticker', this.value)"></td>
-<td><input type="number" value="${h.price}" onchange="update(${i}, 'price', this.value)"></td>
-<td><input type="number" value="${h.qty}" onchange="update(${i}, 'qty', this.value)"></td>
-<td>$${h.value.toLocaleString()}</td>
-<td>${h.weight.toFixed(1)}%</td>
-<td><input type="number" value="${h.target}" onchange="update(${i}, 'target', this.value)"></td>
-<td class="${h.diff>=0?'green':'red'}">${h.diff.toFixed(1)}%</td>
-<td class="${h.order>=0?'green':'red'}">${h.order>=0?'BUY':'SELL'} ${Math.abs(h.order)}</td>
-<td><button onclick="del(${i})">X</button></td>
-`;
-
-    tbody.appendChild(tr);
-  });
-}
-
-function update(i, key, value) {
-  if (key === "ticker") {
-    state.holdings[i][key] = value.toUpperCase();
-  } else {
-    state.holdings[i][key] = Number(value);
-  }
-  render();
-}
-
-function add() {
-  state.holdings.push({ ticker:"", price:0, qty:0, target:0 });
-  render();
-}
-
-function del(i) {
-  state.holdings.splice(i,1);
-  render();
-}
-
-function save() {
-  localStorage.setItem("portfolio", JSON.stringify(state));
-  alert("저장 완료");
-}
-
-function reset() {
-  localStorage.removeItem("portfolio");
-  location.reload();
-}
-
-render();
+fetchFX(); render();
 </script>
-
 </body>
 </html>
