@@ -1,211 +1,214 @@
 <!DOCTYPE html>
+
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Portfolio PRO V4 Integrated</title>
+<title>Portfolio PRO (News Focus)</title>
+
 <style>
-body{margin:0;background:#f6f8fb;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:#111}
-.container{max-width:1200px;margin:auto;padding:20px}
-.top{display:flex;align-items:center;gap:12px;margin-bottom:10px}
-.top h2{margin:0;font-size:22px}
-.card{background:#fff;padding:18px;border-radius:12px;margin-top:14px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
-.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
-input{padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:14px}
-input.num{width:100px;text-align:right}
-button{padding:9px 14px;border:none;border-radius:8px;background:#111;color:#fff;cursor:pointer;font-size:14px}
-button.secondary{background:#e5e7eb;color:#111}
-button.ghost{background:#f3f4f6;color:#111}
-.total{font-size:20px;font-weight:700}
-.badge{padding:4px 8px;background:#eef2ff;border-radius:6px;font-size:12px;margin-left:8px}
-table{width:100%;border-collapse:collapse;margin-top:10px}
-th,td{padding:9px;border-bottom:1px solid #eee;font-size:14px;text-align:center}
-th{color:#64748b;background:#fafafa;font-weight:600}
-td.ticker input{width:90px;text-align:center;font-weight:600;border:1px solid #ddd;border-radius:6px;padding:6px}
-.buy{color:#059669;font-weight:700}
-.sell{color:#dc2626;font-weight:700}
-.hold{color:#64748b;font-weight:600}
-.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
-.metric{padding:12px;background:#f9fafb;border-radius:8px;text-align:left}
-.metric b{font-size:20px;display:block;margin-top:4px}
-.muted{color:#666;font-size:12px}
-.small{font-size:12px;color:#666}
-.risk{color:#dc2626;font-weight:600}
-.warn{color:#d97706;font-weight:600}
+body{font-family:-apple-system;background:#f5f6f8;margin:0}
+.container{max-width:1100px;margin:auto;padding:20px}
+.card{background:#fff;padding:16px;border-radius:10px;margin-top:12px}
+table{width:100%;border-collapse:collapse}
+th,td{padding:8px;border-bottom:1px solid #eee;text-align:center}
+input{width:70px;padding:4px}
+button{padding:6px 10px;border:none;background:#111;color:#fff;border-radius:6px}
+.warn{color:#dc2626;font-weight:bold}
+.good{color:#059669}
 </style>
+
 </head>
+
 <body>
 <div class="container">
-<div class="top">
-<h2>📊 Portfolio PRO V4 Integrated</h2>
-<div style="margin-left:auto;display:flex;gap:8px;align-items:center">
-<span class="small">Finnhub API</span><input id="api" style="width:240px" placeholder="token">
-<button class="ghost" onclick="saveKey()">저장</button>
-</div>
+
+<h2>📊 Portfolio PRO (News Focus)</h2>
+
+<div class="card">
+Finnhub API
+<input id="key" style="width:200px">
+<button onclick="saveKey()">저장</button><br><br>
+
+총 자산: <b id="total">$0</b><br><br>
+
+현금 $ <input id="cash" value="10000"><br><br>
+
+<button onclick="updatePrices()">🔄 가격 업데이트</button> <button onclick="loadNews()">📰 뉴스 불러오기</button>
+
 </div>
 
-<!-- 자산 -->
 <div class="card">
-<div class="row" style="justify-content:space-between">
-<div class="total">총 자산: <span id="totalAsset">$0</span><span class="badge" id="fx">USD/KRW -</span></div>
-<div class="row">
-<label>현금 $</label><input id="cash" class="num" value="10000">
-<label>최소 주문</label><input id="minQty" class="num" value="1">
-<button onclick="updatePrices()">🔄 가격 업데이트</button>
-<button class="secondary" onclick="updateDividends()">📅 배당일</button>
-<button class="secondary" onclick="runAnalysis()">🧠 매크로+뉴스</button>
-</div>
-</div>
-<div class="small" id="lastUpdate" style="margin-top:6px"></div>
+<button onclick="add()">+ 종목 추가</button>
+<button onclick="save()">저장</button>
+<button onclick="reset()">초기화</button>
 </div>
 
-<!-- 포트폴리오 -->
 <div class="card">
-<div class="row">
-<button onclick="addRow()">+ 종목 추가</button>
-<button class="secondary" onclick="saveAll()">저장</button>
-<button class="secondary" onclick="resetAll()">초기화</button>
-<span class="small">목표% 합계: <span id="targetSum">0</span>%</span>
-</div>
 <table>
-<thead><tr><th>티커</th><th>현재가</th><th>수량</th><th>목표%</th><th>현재%</th><th>평가금액</th><th>KRW</th><th>목표금액</th><th>차액</th><th>배당락</th><th>주문</th><th></th></tr></thead>
-<tbody id="holdings"></tbody>
+<thead>
+<tr>
+<th>티커</th><th>현재가</th><th>수량</th><th>목표%</th>
+<th>현재%</th><th>금액</th><th>차이</th><th></th>
+</tr>
+</thead>
+<tbody id="tbody"></tbody>
 </table>
 </div>
 
-<!-- 오더 -->
 <div class="card">
-<h3 style="margin:0 0 8px">ORDER LIST</h3>
-<div id="orderList">가격 업데이트 후 계산됩니다</div>
+<h3>시장 상태</h3>
+<div id="macro">-</div>
 </div>
 
-<!-- 매크로 -->
 <div class="card">
-<h3 style="margin:0 0 8px">시장 상태</h3>
-<div id="macro">매크로+뉴스 버튼을 누르세요</div>
-</div>
-
-<!-- 신호 -->
-<div class="card">
-<h3 style="margin:0 0 8px">종목 신호 (매크로+뉴스)</h3>
-<div id="signals">-</div>
-</div>
-
-<!-- 리스크 -->
-<div class="card">
-<h3 style="margin:0 0 8px">리스크 알림</h3>
-<div id="risk">-</div>
+<h3>중요 뉴스</h3>
+<div id="newsBox">-</div>
 </div>
 
 </div>
 
 <script>
-let KEY = localStorage.getItem("v4i_key")||"";
-document.getElementById("api").value = KEY;
-let state = JSON.parse(localStorage.getItem("v4i_state")||'{"cash":10000,"minQty":1,"holdings":[{"ticker":"QQQ","qty":10,"target":30},{"ticker":"META","qty":5,"target":20},{"ticker":"SCHD","qty":60,"target":50}]}');
-document.getElementById("cash").value = state.cash;
-document.getElementById("minQty").value = state.minQty;
-let usdkrw = 1350;
-let macroScore = 0;
 
-function saveKey(){ KEY=document.getElementById("api").value.trim(); localStorage.setItem("v4i_key",KEY); alert("저장됨"); }
-function saveAll(){ state.cash=+document.getElementById("cash").value; state.minQty=+document.getElementById("minQty").value; localStorage.setItem("v4i_state",JSON.stringify(state)); render(); calc(); }
-function resetAll(){ if(confirm("초기화?")){ localStorage.removeItem("v4i_state"); location.reload(); } }
+let API = localStorage.getItem("key")||"";
+document.getElementById("key").value = API;
 
-async function fj(u){ try{let r=await fetch(u); return await r.json();}catch(e){return null} }
-async function price(s){ let d=await fj(`https://finnhub.io/api/v1/quote?symbol=${s}&token=${KEY}`); return d?.c||0; }
-async function dividend(s){ let d=await fj(`https://finnhub.io/api/v1/stock/dividend?symbol=${s}&token=${KEY}`); return Array.isArray(d)&&d[0]?.exDate?d[0].exDate:"-"; }
-async function news(s){ let to=new Date().toISOString().slice(0,10); let from=new Date(Date.now()-5*86400000).toISOString().slice(0,10); let d=await fj(`https://finnhub.io/api/v1/company-news?symbol=${s}&from=${from}&to=${to}&token=${KEY}`); return Array.isArray(d)?d.slice(0,8):[]; }
-async function sma(s,days){ let to=Math.floor(Date.now()/1000); let from=to-70*86400; let d=await fj(`https://finnhub.io/api/v1/stock/candle?symbol=${s}&resolution=D&from=${from}&to=${to}&token=${KEY}`); if(!d||d.s!=="ok") return 0; let c=d.c.slice(-days); return c.reduce((a,b)=>a+b,0)/c.length; }
-async function getFx(){ let d=await fj(`https://finnhub.io/api/v1/forex/rates?base=USD&token=${KEY}`); if(d?.quote?.KRW) usdkrw=d.quote.KRW; else { let q=await fj(`https://finnhub.io/api/v1/quote?symbol=OANDA:USD_KRW&token=${KEY}`); if(q?.c) usdkrw=q.c; } document.getElementById("fx").textContent=`USD/KRW ${Math.round(usdkrw).toLocaleString()}`; }
-
-function render(){
- let tb=document.getElementById("holdings"); tb.innerHTML="";
- state.holdings.forEach((h,i)=>{
-  tb.innerHTML+=`<tr>
-   <td class="ticker"><input value="${h.ticker}" onchange="state.holdings[${i}].ticker=this.value.toUpperCase();saveAll()"></td>
-   <td id="p${i}">${h.price? '$'+Math.round(h.price):'-'}</td>
-   <td><input class="num" type="number" value="${h.qty}" onchange="state.holdings[${i}].qty=+this.value;saveAll()"></td>
-   <td><input class="num" type="number" value="${h.target}" onchange="state.holdings[${i}].target=+this.value;saveAll()"></td>
-   <td id="cp${i}">-</td><td id="ev${i}">-</td><td id="kr${i}">-</td><td id="tv${i}">-</td><td id="df${i}">-</td>
-   <td id="dv${i}">${h.div||'-'}</td><td id="od${i}">-</td>
-   <td><button class="secondary" style="padding:4px 8px" onclick="state.holdings.splice(${i},1);saveAll()">X</button></td>
-  </tr>`;
- });
- document.getElementById("targetSum").textContent = state.holdings.reduce((a,b)=>a+(b.target||0),0);
+function saveKey(){
+ API=document.getElementById("key").value;
+ localStorage.setItem("key",API);
+ alert("저장됨");
 }
-function addRow(){ state.holdings.push({ticker:"",qty:0,target:0}); saveAll(); }
+
+let state = JSON.parse(localStorage.getItem("pf_news"))||{
+ holdings:[
+  {t:"QQQ",q:10,target:30,p:0},
+  {t:"META",q:5,target:20,p:0},
+  {t:"SCHD",q:60,target:50,p:0}
+ ]
+};
+
+function save(){localStorage.setItem("pf_news",JSON.stringify(state));}
+function reset(){localStorage.removeItem("pf_news");location.reload();}
+
+function add(){
+ state.holdings.push({t:"",q:0,target:0,p:0});
+ render();
+}
+
+function del(i){
+ state.holdings.splice(i,1);
+ render();
+}
+
+async function getPrice(t){
+ try{
+  let r=await fetch(`https://finnhub.io/api/v1/quote?symbol=${t}&token=${API}`);
+  let d=await r.json();
+  return d.c||0;
+ }catch{return 0;}
+}
+
+async function getNews(t){
+ try{
+  let to=new Date().toISOString().slice(0,10);
+  let from=new Date(Date.now()-3*86400000).toISOString().slice(0,10);
+  let r=await fetch(`https://finnhub.io/api/v1/company-news?symbol=${t}&from=${from}&to=${to}&token=${API}`);
+  let d=await r.json();
+  return (d||[]).slice(0,3);
+ }catch{return [];}
+}
 
 async function updatePrices(){
- if(!KEY){alert("API 필요");return}
- await getFx();
- let cash=+document.getElementById("cash").value; let total=cash;
- for(let i=0;i<state.holdings.length;i++){ let h=state.holdings[i]; if(!h.ticker) continue; h.price=await price(h.ticker); document.getElementById("p"+i).textContent=h.price?'$'+Math.round(h.price):'-'; total+=h.price*h.qty; await new Promise(r=>setTimeout(r,180)); }
- document.getElementById("totalAsset").textContent='$'+Math.round(total).toLocaleString();
- document.getElementById("lastUpdate").textContent='업데이트: '+new Date().toLocaleTimeString();
- calc(total); saveAll();
-}
-async function updateDividends(){ if(!KEY){alert("API 필요");return} for(let i=0;i<state.holdings.length;i++){ let h=state.holdings[i]; if(!h.ticker) continue; h.div=await dividend(h.ticker); document.getElementById("dv"+i).textContent=h.div; await new Promise(r=>setTimeout(r,180)); } saveAll(); }
 
-function calc(total){
- if(!total){ let cash=+document.getElementById("cash").value; total=cash+state.holdings.reduce((a,h)=>a+(h.price||0)*h.qty,0); document.getElementById("totalAsset").textContent='$'+Math.round(total).toLocaleString(); }
- let min=+document.getElementById("minQty").value||1; let buy=0,sell=0;
- state.holdings.forEach((h,i)=>{
-  let p=h.price||0, ev=p*h.qty, cur=total?ev/total*100:0, tgt=total*(h.target||0)/100, diff=tgt-ev;
-  let qty=p?Math.trunc(diff/p/min)*min:0;
-  document.getElementById("cp"+i).textContent=cur.toFixed(1)+'%';
-  document.getElementById("ev"+i).textContent='$'+Math.round(ev).toLocaleString();
-  document.getElementById("kr"+i).textContent='₩'+Math.round(ev*usdkrw).toLocaleString();
-  document.getElementById("tv"+i).textContent='$'+Math.round(tgt).toLocaleString();
-  document.getElementById("df"+i).textContent=Math.round(diff).toLocaleString();
-  let od=document.getElementById("od"+i);
-  if(qty>0){od.textContent='BUY '+qty;od.className='buy';buy+=qty*p}
-  else if(qty<0){od.textContent='SELL '+Math.abs(qty);od.className='sell';sell+=Math.abs(qty)*p}
-  else{od.textContent='-';od.className=''}
- });
- document.getElementById("orderList").innerHTML=`BUY: $${Math.round(buy).toLocaleString()}<br>SELL: $${Math.round(sell).toLocaleString()}`;
-}
+ if(!API) return alert("API 입력");
 
-async function runAnalysis(){
- if(!KEY){alert("API 필요");return}
- // macro
- let [spy,vix,uup]=await Promise.all([price("SPY"),price("VIX"),price("UUP")]);
- let spy200=await sma("SPY",200);
- let trend=spy>spy200?1:-1, risk=vix<20?1:vix>28?-1:0, dollar=uup<28.5?1:uup>29.5?-1:0;
- macroScore=trend+risk+dollar;
- document.getElementById("macro").innerHTML=`<div class="grid3">
-  <div class="metric">SPY<b>$${spy.toFixed(0)}</b><span class="small">${spy>spy200?'상승':'하락'} (200일 $${spy200.toFixed(0)})</span></div>
-  <div class="metric">VIX<b>${vix.toFixed(1)}</b><span class="small">${vix<20?'안정':vix>28?'위험':'중립'}</span></div>
-  <div class="metric">UUP(달러)<b>$${uup.toFixed(2)}</b><span class="small">${dollar===1?'약달러':dollar===-1?'강달러':'중립'}</span></div>
- </div><div class="small" style="margin-top:6px">매크로 점수: ${macroScore} / 3</div>`;
-
- // signals
- let html=`<table><thead><tr><th>티커</th><th>현재가</th><th>뉴스점수</th><th>매크로</th><th>합계</th><th>신호</th><th>근거 헤드라인</th></tr></thead><tbody>`;
- let riskHtml="";
  for(let h of state.holdings){
-  if(!h.ticker) continue;
-  let p=h.price||await price(h.ticker); await new Promise(r=>setTimeout(r,150));
-  let ns=await news(h.ticker); await new Promise(r=>setTimeout(r,150));
-  let pos=0,neg=0,score=0;
-  const posR=[/beat|exceed|record|strong|growth|ai|upgrade|outperform|raise|surge/gi];
-  const negR=[/miss|cut|downgrade|weak|drop|fall|plunge|probe|lawsuit|sec|fraud|investigation|경고|하락|적자|소송/gi];
-  ns.forEach(n=>{ let t=(n.headline||'')+' '+(n.summary||''); posR.forEach(r=>{let m=t.match(r); if(m)pos+=m.length}); negR.forEach(r=>{let m=t.match(r); if(m)neg+=m.length}); });
-  score=Math.max(-4,Math.min(4,pos-neg));
-  let total=macroScore+score;
-  let sig="HOLD",cls="hold";
-  if(total>=3){sig="BUY";cls="buy"} else if(total<=-2){sig="SELL";cls="sell"} else if(total>=1){sig="약매수";cls="buy"} else if(total<=-1){sig="약매도";cls="sell"}
-  html+=`<tr><td><b>${h.ticker}</b></td><td>$${p.toFixed(0)}</td><td>${score>0?'+':''}${score}</td><td>${macroScore>0?'+':''}${macroScore}</td><td><b>${total>0?'+':''}${total}</b></td><td class="${cls}">${sig}</td><td class="small" style="text-align:left">${ns[0]?.headline||'-'}</td></tr>`;
-  // risk
-  let riskScore=0; ns.forEach(n=>{let t=(n.headline||'').toLowerCase(); if(/lawsuit|probe|sec|fraud|bankruptcy|소송|조사|압수/.test(t)) riskScore+=3; if(/miss|downgrade|cut|weak|하락|적자/.test(t)) riskScore+=2; });
-  if(riskScore>=3) riskHtml+=`<div class="risk">⚠ ${h.ticker} 고위험 (${riskScore}) - ${ns[0]?.headline||''}</div>`;
-  else if(riskScore>=2) riskHtml+=`<div class="warn">△ ${h.ticker} 주의 (${riskScore})</div>`;
+  if(!h.t) continue;
+  h.p = await getPrice(h.t);
+  await new Promise(r=>setTimeout(r,200));
  }
- html+=`</tbody></table>`;
- document.getElementById("signals").innerHTML=html;
- document.getElementById("risk").innerHTML=riskHtml||"✓ 최근 5일 특이 리스크 없음";
+
+ render();
+ save();
 }
 
-render(); calc();
+function render(){
+
+ let tbody=document.getElementById("tbody");
+ tbody.innerHTML="";
+
+ let cash=+document.getElementById("cash").value;
+ let total=cash;
+
+ state.holdings.forEach(h=>{
+  total+=h.p*h.q;
+ });
+
+ document.getElementById("total").innerText="$"+total.toLocaleString();
+
+ state.holdings.forEach((h,i)=>{
+
+  let val=h.p*h.q;
+  let pct= total? (val/total*100):0;
+  let tgt= total*(h.target/100);
+  let diff=tgt-val;
+
+  tbody.innerHTML+=`
+  <tr>
+  <td><input value="${h.t}" onchange="state.holdings[${i}].t=this.value.toUpperCase()"></td>
+  <td>$${h.p||"-"}</td>
+  <td><input value="${h.q}" onchange="state.holdings[${i}].q=+this.value;render()"></td>
+  <td><input value="${h.target}" onchange="state.holdings[${i}].target=+this.value;render()"></td>
+  <td>${pct.toFixed(1)}%</td>
+  <td>$${val.toFixed(0)}</td>
+  <td>${diff.toFixed(0)}</td>
+  <td><button onclick="del(${i})">X</button></td>
+  </tr>`;
+ });
+
+}
+
+async function loadNews(){
+
+ let box=document.getElementById("newsBox");
+ box.innerHTML="";
+
+ let macroText="";
+
+ let spy=await getPrice("SPY");
+ let vix=await getPrice("VIX");
+
+ macroText = `SPY:${spy} / VIX:${vix}`;
+ document.getElementById("macro").innerText=macroText;
+
+ for(let h of state.holdings){
+
+  let n=await getNews(h.t);
+
+  if(n.length===0) continue;
+
+  box.innerHTML+=`<b>${h.t}</b><br>`;
+
+  n.forEach(x=>{
+    let txt=x.headline;
+
+    let cls="";
+    if(txt.match(/lawsuit|sec|fraud|probe/i)) cls="warn";
+    if(txt.match(/ai|growth|record/i)) cls="good";
+
+    box.innerHTML+=`<div class="${cls}">• ${txt}</div>`;
+  });
+
+  box.innerHTML+="<br>";
+
+  await new Promise(r=>setTimeout(r,200));
+ }
+
+ if(!box.innerHTML) box.innerHTML="-";
+}
+
+render();
+
 </script>
+
 </body>
 </html>
