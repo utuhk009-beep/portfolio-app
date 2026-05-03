@@ -1,173 +1,155 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8">
-  <title>Portfolio Engine</title>
-  <style>
-    body { font-family: Arial; padding: 20px; }
-    table { border-collapse: collapse; width: 100%; margin-top:20px;}
-    th, td { border:1px solid #ccc; padding:8px; text-align:center;}
-    th { background:#f0f0f0; }
-    .buy { color:green; font-weight:bold; }
-    .sell { color:red; font-weight:bold; }
-    .hold { color:gray; }
-  </style>
+<meta charset="UTF-8">
+<title>Portfolio Engine PRO</title>
+<style>
+body {font-family: -apple-system, BlinkMacSystemFont; background: #f3f4f6; padding: 20px;}
+.card {background: white; border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 6px rgba(0,0,0,0.05);}
+button {padding: 10px 16px; border-radius: 8px; border: none; background: #2563eb; color: white; font-weight: bold; cursor: pointer; margin-right:6px;}
+button:hover {background: #1e40af;}
+button.secondary {background:#e5e7eb;color:#111;}
+table {width: 100%; border-collapse: collapse;}
+th {background: #e5e7eb; padding: 12px; text-align: center;}
+td {padding: 12px; text-align: center; border-top: 1px solid #eee;}
+tr:hover {background: #f9fafb;}
+.buy {color: #16a34a; font-weight: bold;}
+.sell {color: #dc2626; font-weight: bold;}
+.hold {color: gray; font-weight: bold;}
+.news-item {margin: 4px 0;}
+.news-item a {color:#111;text-decoration:none;}
+.news-item a:hover {text-decoration:underline;}
+input {padding:8px;border:1px solid #ddd;border-radius:6px;}
+.badge {background:#eef2ff;padding:4px 8px;border-radius:999px;font-size:12px;margin-left:8px;}
+</style>
 </head>
-
 <body>
 
-<h2>📊 Portfolio</h2>
+<div class="card">
+  <h2>📊 Portfolio <span id="fx" class="badge">USD/KRW -</span></h2>
+  <div style="margin-bottom:12px">
+    Finnhub API <input id="api" style="width:220px" placeholder="API 키">
+    현금 $ <input id="cash" value="10000" style="width:100px">
+    <button onclick="saveKey()">저장</button>
+    <button onclick="add()">+ 종목</button>
+  </div>
+  <button onclick="runAll()">전체 분석 실행</button>
+  <div id="macro" style="margin-top:10px;color:#555"></div>
 
-<button onclick="runAll()">전체 분석 실행</button>
+  <table style="margin-top:12px">
+    <thead>
+      <tr>
+        <th>Ticker</th><th>가격</th><th>등락</th><th>수량</th><th>현재%</th><th>목표%</th><th>행동</th><th></th>
+      </tr>
+    </thead>
+    <tbody id="table"></tbody>
+  </table>
+</div>
 
-<div id="macro" style="margin-top:10px;"></div>
-
-<table>
-  <thead>
-    <tr>
-      <th>Ticker</th>
-      <th>현재 %</th>
-      <th>목표 %</th>
-      <th>행동</th>
-    </tr>
-  </thead>
-  <tbody id="table"></tbody>
-</table>
-
-<h3>📰 News Sentiment</h3>
-<div id="newsBox"></div>
+<div class="card">
+  <h3>📰 News Sentiment</h3>
+  <div id="newsBox"></div>
+</div>
 
 <script>
+let KEY = localStorage.getItem('key')||'';
+document.getElementById('api').value = KEY;
+function saveKey(){KEY=document.getElementById('api').value.trim();localStorage.setItem('key',KEY);alert('저장됨')}
 
-// ----------------------
-// 상태 (Portfolio)
-// ----------------------
-const state = {
-  cash: 10000,
-  holdings: [
-    { t: "QQQ", shares: 7, target: 30 },
-    { t: "META", shares: 5, target: 20 },
-    { t: "SCHD", shares: 60, target: 50 }
+let usdkrw = 1471;
+let state = JSON.parse(localStorage.getItem('pf_pro')) || {
+  holdings:[
+    {t:"QQQ", shares:7, target:30, p:0, dp:0},
+    {t:"META", shares:5, target:20, p:0, dp:0},
+    {t:"SCHD", shares:60, target:50, p:0, dp:0}
   ]
 };
+function save(){localStorage.setItem('pf_pro',JSON.stringify(state))}
+function add(){state.holdings.push({t:"",shares:0,target:0,p:0,dp:0});render();save()}
+function del(i){state.holdings.splice(i,1);render();save()}
 
-// ----------------------
-// 가격 (임시 데이터)
-// ----------------------
-async function price(ticker) {
-  const fake = {
-    QQQ: 674,
-    META: 609,
-    SCHD: 32,
-    SPY: 721,
-    VIX: 20
-  };
-  return fake[ticker] || 100;
+async function fetchJSON(u){try{return await (await fetch(u)).json()}catch{return null}}
+async function getFx(){try{const d=await fetchJSON('https://api.manana.kr/exchange/rate.json');const usd=d.find(x=>x.code==='USD');if(usd)usdkrw=usd.rate}catch{}document.getElementById('fx').textContent=`USD/KRW ${usdkrw.toLocaleString()}`}
+
+async function price(t){
+ if(!t||!KEY) return {c:0,dp:0};
+ const q=await fetchJSON(`https://finnhub.io/api/v1/quote?symbol=${t}&token=${KEY}`);
+ return {c:q?.c||0, dp:q?.dp||0}
+}
+async function news(t){
+ const to=new Date().toISOString().slice(0,10), from=new Date(Date.now()-5*864e5).toISOString().slice(0,10);
+ const d=await fetchJSON(`https://finnhub.io/api/v1/company-news?symbol=${t}&from=${from}&to=${to}&token=${KEY}`);
+ return Array.isArray(d)?d.slice(0,5):[]
+}
+async function translateToKo(txt){
+ try{
+  const r=await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(txt)}&langpair=en|ko`);
+  const d=await r.json(); const t=d?.responseData?.translatedText||txt;
+  if(t.toUpperCase().includes('MYMEMORY')) return txt;
+  return t;
+ }catch{return txt}
+}
+function importance(txt){
+ let s=0; const t=txt.toLowerCase();
+ if(/growth|strong|beat|upgrade|record|surge/.test(t)) s+=3;
+ if(/risk|pressure|miss|downgrade|weak|slowdown/.test(t)) s-=3;
+ if(/inflation|recession|fed|rate/.test(t)) s-=2;
+ return s;
 }
 
-// ----------------------
-// 뉴스 (임시)
-// ----------------------
-async function news(ticker) {
-  return [
-    { headline: `${ticker} strong growth expected` },
-    { headline: `${ticker} faces short term risk` }
-  ];
+async function runAll(){
+ await getFx();
+ const spy=await price("SPY"); const vix=await price("VIX");
+ document.getElementById("macro").innerText = `SPY $${Math.round(spy.c)} / VIX ${vix.c.toFixed(1)}`;
+
+ let total = +document.getElementById('cash').value||0;
+ for(const h of state.holdings){
+   const p=await price(h.t); h.p=p.c; h.dp=p.dp; h.value=h.p*h.shares; total+=h.value;
+ }
+ for(const h of state.holdings){
+   h.current = total? h.value/total*100 : 0;
+   const gap = h.current - h.target;
+   if(gap > 5) h.action="sell";
+   else if(gap < -5) h.action="buy";
+   else h.action="hold";
+ }
+ render();
+ renderNews();
+ save();
 }
 
-// ----------------------
-// 점수 계산
-// ----------------------
-function importance(text) {
-  let score = 0;
-  if (text.includes("growth")) score += 3;
-  if (text.includes("strong")) score += 2;
-  if (text.includes("risk")) score -= 3;
-  return score;
+function render(){
+ const tb=document.getElementById("table");
+ tb.innerHTML = state.holdings.map((h,i)=>`
+  <tr>
+    <td><input value="${h.t}" onchange="state.holdings[${i}].t=this.value.toUpperCase();save()" style="width:70px"></td>
+    <td>$${Math.round(h.p||0)}</td>
+    <td style="color:${h.dp>=0?'#16a34a':'#dc2626'}">${h.dp>=0?'+':''}${(h.dp||0).toFixed(1)}%</td>
+    <td><input value="${h.shares}" type="number" onchange="state.holdings[${i}].shares=+this.value;save()" style="width:60px"></td>
+    <td>${(h.current||0).toFixed(1)}%</td>
+    <td><input value="${h.target}" type="number" onchange="state.holdings[${i}].target=+this.value;save()" style="width:60px"></td>
+    <td class="${h.action||'hold'}">${(h.action||'hold').toUpperCase()}</td>
+    <td><button class="secondary" onclick="del(${i})" style="padding:4px 8px">🗑️</button></td>
+  </tr>`).join('');
 }
 
-// ----------------------
-// 메인 엔진
-// ----------------------
-async function runAll() {
-
-  // 매크로
-  const spy = await price("SPY");
-  const vix = await price("VIX");
-  document.getElementById("macro").innerText =
-    `SPY: ${spy} / VIX: ${vix}`;
-
-  // 총 자산
-  let total = 0;
-
-  for (const h of state.holdings) {
-    const p = await price(h.t);
-    h.value = p * h.shares;
-    total += h.value;
-  }
-
-  // 계산 + 행동
-  for (const h of state.holdings) {
-    h.current = (h.value / total) * 100;
-
-    if (h.current > h.target) h.action = "sell";
-    else if (h.current < h.target) h.action = "buy";
-    else h.action = "hold";
-  }
-
-  render();
-
-  // 뉴스
-  renderNews();
+async function renderNews(){
+ let totalScore=0; let box="";
+ for(const h of state.holdings){
+   const raw=await news(h.t);
+   box+=`<b>${h.t}</b><br>`;
+   for(const n of raw.slice(0,2)){
+     const s=importance(n.headline+' '+(n.summary||'')); totalScore+=s;
+     const ko=await translateToKo(n.headline);
+     box+=`<div class="news-item">• <a href="${n.url}" target="_blank">${ko}</a> <span style="color:#888">(${s>0?'+':''}${s})</span></div>`;
+   }
+   box+='<br>';
+ }
+ totalScore=Math.max(-10,Math.min(10,totalScore));
+ document.getElementById("newsBox").innerHTML=`<b>Score: ${totalScore}</b><br>${box}`;
 }
 
-// ----------------------
-// UI 렌더링
-// ----------------------
-function render() {
-  const table = document.getElementById("table");
-
-  table.innerHTML = state.holdings.map(h => `
-    <tr>
-      <td>${h.t}</td>
-      <td>${h.current.toFixed(1)}%</td>
-      <td>${h.target}%</td>
-      <td class="${h.action}">
-        ${h.action.toUpperCase()}
-      </td>
-    </tr>
-  `).join("");
-}
-
-// ----------------------
-// 뉴스 렌더링
-// ----------------------
-async function renderNews() {
-  let box = "";
-  let totalScore = 0;
-
-  for (const h of state.holdings) {
-    const raw = await news(h.t);
-
-    for (const n of raw) {
-      const s = importance(n.headline);
-      totalScore += s;
-      box += `<div>• ${n.headline} (${s})</div>`;
-    }
-  }
-
-  totalScore = Math.max(-10, Math.min(10, totalScore));
-
-  document.getElementById("newsBox").innerHTML =
-    `<b>Score: ${totalScore}</b><br>${box}`;
-}
-
-// ----------------------
-// 자동 실행
-// ----------------------
 runAll();
-
 </script>
-
 </body>
 </html>
