@@ -2,22 +2,21 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<title>Portfolio PRO LEVEL 7 - Final</title>
+<title>Portfolio PRO LEVEL 7 - Final Fix</title>
 <style>
-body{margin:0;background:#f5f7fb;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",sans-serif}
+body{margin:0;background:#f5f7fb;font-family:"Noto Sans KR",sans-serif}
 .container{max-width:1300px;margin:auto;padding:24px}
 .card{background:#fff;padding:18px;border-radius:14px;margin-top:14px;box-shadow:0 2px 8px rgba(0,0,0,.06)}
 table{width:100%;border-collapse:collapse}
-th,td{padding:12px;border-bottom:1px solid #eee;text-align:center;font-size:16px}
+th,td{padding:12px;border-bottom:1px solid #eee;text-align:center}
 th{background:#fafafa;color:#666}
-input{padding:8px;border:1px solid #ddd;border-radius:8px;width:100px;text-align:center;font-size:15px}
-button{padding:9px 14px;border:none;border-radius:9px;background:#111;color:#fff;font-weight:600;cursor:pointer;margin-right:6px}
-button:hover{opacity:.9}
+input{padding:8px;border:1px solid #ddd;border-radius:8px;width:100px;text-align:center}
+button{padding:9px 14px;border:none;border-radius:9px;background:#111;color:#fff;font-weight:600;margin-right:6px}
 .safe{color:#059669;font-weight:700}
 .warn{color:#d97706;font-weight:700}
 .risk{color:#dc2626;font-weight:700}
 .news{margin:8px 0;padding:10px;border-bottom:1px dashed #ddd;text-align:left}
-.news-ko{font-size:16px;font-weight:600;margin-bottom:3px}
+.news-ko{font-weight:600}
 .small{font-size:12px;color:#888}
 </style>
 </head>
@@ -26,17 +25,11 @@ button:hover{opacity:.9}
 <h2>📊 Portfolio PRO LEVEL 7</h2>
 
 <div class="card">
-API <input id="api" style="width:260px" placeholder="Finnhub token">
+API <input id="api" style="width:260px">
 현금 $ <input id="cash" value="10000">
 <button onclick="saveKey()">저장</button>
 <button onclick="updatePrices()">가격</button>
 <button onclick="runAll()">전체 분석</button>
-</div>
-
-<div class="card">
-<button onclick="add()">+ 종목</button>
-<button onclick="save()">저장</button>
-<button onclick="reset()">초기화</button>
 </div>
 
 <div class="card">
@@ -46,70 +39,53 @@ API <input id="api" style="width:260px" placeholder="Finnhub token">
 </table>
 </div>
 
-<div class="card"><h3>시장 상태</h3><div id="macro">-</div></div>
-<div class="card"><h3>핵심 뉴스 (한글)</h3><div id="newsBox">-</div></div>
+<div class="card"><h3>시장</h3><div id="macro">-</div></div>
+<div class="card"><h3>뉴스</h3><div id="newsBox">-</div></div>
 </div>
 
 <script>
-let KEY = localStorage.getItem("key")||"";
-document.getElementById("api").value = KEY;
-function saveKey(){ KEY=document.getElementById("api").value.trim(); localStorage.setItem("key",KEY); alert("저장됨"); }
-
-let state = JSON.parse(localStorage.getItem("pf_lv7"))||{
- holdings:[{t:"QQQ",q:10,target:30,p:0},{t:"META",q:5,target:20,p:0},{t:"SCHD",q:60,target:50,p:0}]
-};
-function save(){localStorage.setItem("pf_lv7",JSON.stringify(state))}
-function reset(){localStorage.removeItem("pf_lv7");location.reload()}
-function add(){state.holdings.push({t:"",q:0,target:0,p:0});render()}
-
-async function fetchJSON(url){try{return await (await fetch(url)).json()}catch{return null}}
+let KEY=localStorage.getItem("key")||"";document.getElementById("api").value=KEY;
+function saveKey(){KEY=document.getElementById("api").value.trim();localStorage.setItem("key",KEY)}
+let state=JSON.parse(localStorage.getItem("pf_lv7"))||{holdings:[{t:"QQQ",q:10,target:30,p:0},{t:"META",q:5,target:20,p:0},{t:"SCHD",q:60,target:50,p:0}]};
+async function fetchJSON(u){try{return await (await fetch(u)).json()}catch{return null}}
 async function price(t){let d=await fetchJSON(`https://finnhub.io/api/v1/quote?symbol=${t}&token=${KEY}`);return d?.c||0}
-async function news(t){let to=new Date().toISOString().slice(0,10);let from=new Date(Date.now()-5*86400000).toISOString().slice(0,10);let d=await fetchJSON(`https://finnhub.io/api/v1/company-news?symbol=${t}&from=${from}&to=${to}&token=${KEY}`);return Array.isArray(d)?d.slice(0,10):[]}
-
-// 번역 안정화
+async function news(t){let to=new Date().toISOString().slice(0,10),from=new Date(Date.now()-5*864e5).toISOString().slice(0,10);let d=await fetchJSON(`https://finnhub.io/api/v1/company-news?symbol=${t}&from=${from}&to=${to}&token=${KEY}`);return Array.isArray(d)?d:[]}
 async function translateToKo(txt){try{let r=await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(txt)}&langpair=en|ko`);let d=await r.json();return d.responseData?.translatedText||txt}catch{return txt}}
 
-function importance(txt){let s=0;if(/fed|cpi|inflation|rate|recession/i.test(txt))s+=6;if(/lawsuit|fraud|bankruptcy/i.test(txt))s+=5;if(/earnings|guidance|miss|downgrade/i.test(txt))s+=4;if(/beat|record|growth|upgrade/i.test(txt))s+=2;return s}
+function sentiment(txt){let s=0;if(/inflation|recession|concerning|weak|drop|risk|miss|downgrade|lawsuit|fraud|bankruptcy|cut|slow/i.test(txt))s-=1;if(/growth|strong|beat|upgrade|record|surge|expansion|robust/i.test(txt))s+=1;return s}
+function importance(txt){let b=0;if(/fed|cpi|inflation|rate|recession/i.test(txt))b+=6;if(/lawsuit|fraud|bankruptcy/i.test(txt))b+=5;if(/earnings|guidance|miss|downgrade/i.test(txt))b+=4;if(/beat|record|growth|upgrade/i.test(txt))b+=3;return b*sentiment(txt)}
 
-// 구조 점수 단계화
-function structureScore(h,total){let val=h.p*h.q;let pct=total?val/total*100:0;let gap=pct-h.target;if(gap>30)return -7;if(gap>20)return -5;if(gap>10)return -3;if(gap<-30)return 7;if(gap<-20)return 5;if(gap<-10)return 3;return 0}
+function structureScore(h,total){let v=h.p*h.q,p=total?v/total*100:0,g=p-h.target;if(g>30)return-7;if(g>20)return-5;if(g>10)return-3;if(g<-30)return 7;if(g<-20)return 5;if(g<-10)return 3;return 0}
+function macroScore(v,s,y){let m=0;if(v>25)m-=2;if(s<400)m-=2;if(y>4.5)m-=2;if(v<18)m+=1;if(s>420)m+=1;if(y<3.5)m+=1;return m}
+function macroCycle(v,s,y){if(v>30&&s<380)return"침체";if(v>25)return"둔화";if(y<3.5&&s>420)return"확장";return"중립"}
 
-function macroScore(vix,spy,y){let s=0;if(vix>25)s-=2;if(spy<400)s-=2;if(y>4.5)s-=2;if(vix<18)s+=1;if(spy>420)s+=1;if(y<3.5)s+=1;return s}
-function macroCycle(vix,spy,y){if(vix>30&&spy<380)return"침체";if(vix>25)return"둔화";if(y<3.5&&spy>420)return"확장";return"중립"}
-
-function decision(news,macro,struct,cycle){
- let bonus=cycle==="침체"?-2:cycle==="확장"?1:0;
- let t=news+macro+struct+bonus;
- if(t>=6)return{txt:"AGGRESSIVE BUY",cls:"safe"};
- if(t>=3)return{txt:"ADD",cls:"safe"};
- if(t<=-6)return{txt:"STRONG REDUCE",cls:"risk"};
- if(t<=-3)return{txt:"REDUCE",cls:"risk"};
- return{txt:"HOLD",cls:"warn"};
+// ✅ 1️⃣ 구조 우선 보호
+function decision(n,m,s,c){
+ let b=c==="침체"?-2:c==="확장"?1:0;
+ if(s<=-5) return {txt:"REDUCE",cls:"risk"};
+ if(s>=5) return {txt:"ADD",cls:"safe"};
+ let t=n+m+s+b;
+ if(t>=5) return {txt:"ADD",cls:"safe"};
+ if(t<=-5) return {txt:"REDUCE",cls:"risk"};
+ return {txt:"HOLD",cls:"warn"};
 }
 
-function render(){let tb=document.getElementById("tbody");tb.innerHTML="";let cash=+document.getElementById("cash").value;let total=cash;state.holdings.forEach(h=>total+=h.p*h.q);state.holdings.forEach((h,i)=>{let val=h.p*h.q;let pct=total?val/total*100:0;let tgt=total*h.target/100;let diff=tgt-val;tb.innerHTML+=`<tr><td><input value="${h.t}" onchange="state.holdings[${i}].t=this.value.toUpperCase()"></td><td>$${h.p?Math.round(h.p):"-"}</td><td><input value="${h.q}" onchange="state.holdings[${i}].q=+this.value;render()"></td><td><input value="${h.target}" onchange="state.holdings[${i}].target=+this.value;render()"></td><td>${pct.toFixed(1)}%</td><td>$${Math.round(val).toLocaleString()}</td><td>${Math.round(diff).toLocaleString()}</td><td id="act${i}">-</td></tr>`})}
-
-async function updatePrices(){for(let h of state.holdings){h.p=await price(h.t)}render();save()}
+function render(){let tb=document.getElementById("tbody");tb.innerHTML="";let cash=+document.getElementById("cash").value,total=cash;state.holdings.forEach(h=>total+=h.p*h.q);state.holdings.forEach((h,i)=>{let v=h.p*h.q,p=total?v/total*100:0,t=total*h.target/100,d=t-v;tb.innerHTML+=`<tr><td><input value="${h.t}" onchange="state.holdings[${i}].t=this.value.toUpperCase()"></td><td>$${Math.round(h.p)}</td><td><input value="${h.q}" onchange="state.holdings[${i}].q=+this.value;render()"></td><td><input value="${h.target}" onchange="state.holdings[${i}].target=+this.value;render()"></td><td>${p.toFixed(1)}%</td><td>$${Math.round(v).toLocaleString()}</td><td>${Math.round(d).toLocaleString()}</td><td id="act${i}">-</td></tr>`})}
+async function updatePrices(){for(let h of state.holdings)h.p=await price(h.t);render()}
 
 async function runAll(){
- let box=document.getElementById("newsBox");box.innerHTML="분석중...";
- let spy=await price("SPY");
- let vix=await price("VIX")||await price("^VIX");
- if(!vix||vix<10||vix>100)vix=20; // VIX 보정 강화
- let y10=await price("US10Y")||4.0;
- let cycle=macroCycle(vix,spy,y10);
- document.getElementById("macro").innerHTML=`SPY $${Math.round(spy)} / VIX ${vix.toFixed(1)} / 10Y ${y10}% / <b>${cycle}</b>`;
-
- let total=+document.getElementById("cash").value;state.holdings.forEach(x=>total+=x.p*x.q);
- box.innerHTML="";
- for(let i=0;i<state.holdings.length;i++){let h=state.holdings[i];let raw=await news(h.t);let newsSum=0;
-  let filtered=raw.map(n=>{let txt=(n.headline||"")+" "+(n.summary||"");return{...n,s:importance(txt)}}).filter(n=>n.s>=3).sort((a,b)=>b.s-a.s).slice(0,2);
-  box.innerHTML+=`<b>${h.t}</b><br>`;
-  for(let n of filtered){newsSum+=n.s;let ko=await translateToKo(n.headline);box.innerHTML+=`<div class="news"><div class="news-ko">• ${ko}</div><div class="small">${n.headline} · score:${n.s} · <a href="${n.url}" target="_blank">원문</a></div></div>`}
-  let struct=structureScore(h,total);let macroS=macroScore(vix,spy,y10);let d=decision(newsSum,macroS,struct,cycle);
-  document.getElementById("act"+i).innerHTML=`<span class="${d.cls}">${d.txt}</span>`;
-  box.innerHTML+="<br>";
- }
+ let spy=await price("SPY");let vix=await price("VIX")||await price("^VIX");if(!vix||vix<10||vix>100)vix=20;let y10=await price("US10Y")||4;let cycle=macroCycle(vix,spy,y10);
+ document.getElementById("macro").innerHTML=`SPY $${Math.round(spy)} · VIX ${vix.toFixed(1)} · 10Y ${y10}% · ${cycle}`;
+ let total=+document.getElementById("cash").value;state.holdings.forEach(h=>total+=h.p*h.q);
+ let box="";for(let i=0;i<state.holdings.length;i++){let h=state.holdings[i];let raw=await news(h.t);let sum=0;
+  let filtered=raw.map(n=>{let txt=(n.headline||"")+" "+(n.summary||"");return{...n,s:importance(txt)}}).filter(n=>Math.abs(n.s)>=3).sort((a,b)=>Math.abs(b.s)-Math.abs(a.s)).slice(0,2);
+  box+=`<b>${h.t}</b><br>`;
+  for(let n of filtered){sum+=n.s;let ko=await translateToKo(n.headline);box+=`<div class="news"><div class="news-ko">${n.s>0?'▲':'▼'} ${ko}</div><div class="small">score:${n.s}</div></div>`}
+  // ✅ 2️⃣ 뉴스 점수 제한
+  sum=Math.max(-10,Math.min(10,sum));
+  let struct=structureScore(h,total);let macro=macroScore(vix,spy,y10);let d=decision(sum,macro,struct,cycle);
+  document.getElementById("act"+i).innerHTML=`<span class="${d.cls}">${d.txt}</span>`;box+="<br>"}
+ document.getElementById("newsBox").innerHTML=box;
 }
 render();
 </script>
